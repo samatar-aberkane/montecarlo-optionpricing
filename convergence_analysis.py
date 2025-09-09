@@ -28,7 +28,7 @@ class ConvergenceAnalyzer:
         self.exotic_engine = ExoticOptionsEngine(seed=seed)
         self.greeks_engine = GreeksEngine(seed=seed)
     
-    def monte_carlo_convergence(self, 
+   def monte_carlo_convergence(self, 
                                pricing_func: Callable,
                                true_price: float,
                                M_values: np.ndarray,
@@ -42,70 +42,48 @@ class ConvergenceAnalyzer:
         pricing_func: Function to analyze
         true_price: Theoretical benchmark price
         M_values: Array of simulation counts
-        n_trials: Number of independent trials per M
+        n_trials: Number of independent trials for each M value
         
         Returns:
         --------
-        Dictionary with convergence statistics
+        Dictionary with arrays for mean prices, RMSE, std dev, and computation times
         """
-        results = {
-            'M_values': M_values,
-            'mean_prices': np.zeros(len(M_values)),
-            'std_prices': np.zeros(len(M_values)),
-            'mean_errors': np.zeros(len(M_values)),
-            'std_errors': np.zeros(len(M_values)),
-            'rmse': np.zeros(len(M_values)),
-            'computation_times': np.zeros(len(M_values)),
-            'all_prices': [],
-            'all_errors': []
-        }
+        
+        mean_prices = np.zeros(len(M_values))
+        std_devs = np.zeros(len(M_values))
+        rmses = np.zeros(len(M_values))
+        computation_times = np.zeros(len(M_values))
         
         for i, M in enumerate(M_values):
-            print(f"Analyzing M = {M:,}...")
+            prices_per_trial = np.zeros(n_trials)
+            start_time = time.time()
             
-            trial_prices = []
-            trial_errors = []
-            trial_times = []
+            kwargs_trial = kwargs.copy()
+            kwargs_trial['M'] = int(M)
             
-            for trial in range(n_trials):
-                # Use different seed for each trial
-                engine = MCPricingEngine(seed=trial * 1000 + i)
+            for j in range(n_trials):
+                # Call the pricing function
+                price_result = pricing_func(**kwargs_trial)
                 
-                start_time = time.time()
-                
-                # Update pricing function with new engine if needed
-                if hasattr(pricing_func, '__self__'):
-                    # Bound method - update engine
-                    original_engine = pricing_func.__self__
-                    pricing_func.__self__ = engine
-                
-                kwargs_trial = kwargs.copy()
-                kwargs_trial['M'] = int(M)
-                
-                price = pricing_func(**kwargs_trial)
-                elapsed = time.time() - start_time
-                
-                # Handle control variate case
-                if isinstance(price, tuple):
-                    price = price[0]  # Use plain MC for consistency
-                
-                error = abs(price - true_price)
-                
-                trial_prices.append(price)
-                trial_errors.append(error)
-                trial_times.append(elapsed)
+                # Handle tuple return (e.g., from control variates)
+                if isinstance(price_result, tuple):
+                    prices_per_trial[j] = price_result[0]
+                else:
+                    prices_per_trial[j] = price_result
             
-            # Calculate statistics
-            results['mean_prices'][i] = np.mean(trial_prices)
-            results['std_prices'][i] = np.std(trial_prices)
-            results['mean_errors'][i] = np.mean(trial_errors)
-            results['std_errors'][i] = np.std(trial_errors)
-            results['rmse'][i] = np.sqrt(np.mean(np.array(trial_errors)**2))
-            results['computation_times'][i] = np.mean(trial_times)
-            results['all_prices'].append(trial_prices)
-            results['all_errors'].append(trial_errors)
-        
-        return results
+            end_time = time.time()
+            
+            mean_prices[i] = np.mean(prices_per_trial)
+            std_devs[i] = np.std(prices_per_trial, ddof=1)
+            rmses[i] = np.sqrt(np.mean((prices_per_trial - true_price)**2))
+            computation_times[i] = (end_time - start_time) / n_trials
+            
+        return {
+            'mean_prices': mean_prices,
+            'std_devs': std_devs,
+            'rmse': rmses,
+            'computation_times': computation_times
+        }
     
     def control_variates_analysis(self, 
                                  pricing_func: Callable,
