@@ -15,7 +15,7 @@ class MCPricingEngine:
     def __init__(self, seed: Optional[int] = None):
         """Initialize pricing engine with random generator"""
         self.rng = np.random.default_rng(seed)
-    
+
     def simulate_gbm_vectorized(self, 
                                S0: float, 
                                T: float, 
@@ -43,6 +43,11 @@ class MCPricingEngine:
         """
         dt = T / N
         
+        # Adjust M for antithetic variates
+        if antithetic and M % 2 != 0:
+            warnings.warn("M must be even for antithetic variates. Using M+1 simulations.", UserWarning)
+            M += 1
+
         # Generate all random numbers at once
         if antithetic:
             half_M = M // 2
@@ -50,14 +55,17 @@ class MCPricingEngine:
             Z = np.vstack([Z, -Z])
         else:
             Z = self.rng.normal(0, 1, (M, N))
-        
-        # Vectorized calculation - no loops
+
+        # Calculate log returns
         log_returns = (r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z
+        
+        # Calculate price paths
         log_S = np.zeros((M, N+1))
         log_S[:, 0] = np.log(S0)
         log_S[:, 1:] = np.log(S0) + np.cumsum(log_returns, axis=1)
         
         return np.exp(log_S)
+    
     
     def black_scholes_call(self, S0: float, K: float, T: float, r: float, sigma: float) -> float:
         """Black-Scholes call option price"""
