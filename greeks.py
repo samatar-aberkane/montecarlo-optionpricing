@@ -1,5 +1,5 @@
 """
-Greeks Calculation - Industrial Implementation
+Greeks Calculation
 Advanced finite differences with optimal step sizes and pathwise Greeks
 """
 
