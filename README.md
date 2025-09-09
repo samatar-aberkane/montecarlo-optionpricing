@@ -4,6 +4,10 @@
 [![NumPy](https://img.shields.io/badge/NumPy-1.21+-orange.svg)](https://numpy.org/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+## 🚀 Getting Started
+
+1. Clone the repository:
+
 **Professional-grade Monte Carlo option pricing engine with advanced variance reduction techniques and comprehensive Greeks calculation.**
 
 ## 🚀 Key Features
