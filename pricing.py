@@ -84,6 +84,7 @@ class MCPricingEngine:
         d1 = (np.log(S0 / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)
         return K * np.exp(-r*T) * norm.cdf(-d2) - S0 * norm.cdf(-d1)
+    
     def european_call_mc(self, 
                     S0: float, 
                     K: float, 
@@ -94,37 +95,34 @@ class MCPricingEngine:
                     M: int = 100000, 
                     antithetic: bool = True,
                     control_variate: bool = False) -> Union[float, Tuple[float, float]]:
-    """
-    Monte Carlo pricing of European call with proper control variates
-    """
-    S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
-    payoff = np.maximum(S[:, -1] - K, 0)
-    mc_price = np.exp(-r*T) * np.mean(payoff)
-    
-    if not control_variate:
-        return mc_price
-    
-    # CORRECTION: Use analytical Black-Scholes as control variate
-    bs_price = self.black_scholes_call(S0, K, T, r, sigma)
-    
-    # CORRECTION: Use the same simulated paths for control
-    # The control is the discounted terminal stock price
-    control = np.exp(-r*T) * S[:, -1]  # E[control] = S0
-    
-    # CORRECTION: Proper beta calculation
-    covariance = np.cov(payoff, control)[0, 1]
-    control_variance = np.var(control)
-    
-    if control_variance > 1e-10:  # Avoid division by zero
-        beta = -covariance / control_variance
-    else:
-        beta = 0
-    
-    # Control variate estimator
-    cv_price = mc_price + beta * (np.mean(control) - S0)
-    
-    return mc_price, cv_price
-    
+        """
+        Monte Carlo pricing of European call with optimized control variates
+        Using stock price as control with exact expectation
+        """
+        S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
+        terminal_prices = S[:, -1]
+        
+        # Standard MC payoff
+        payoff = np.maximum(terminal_prices - K, 0)
+        mc_price = np.exp(-r*T) * np.mean(payoff)
+        
+        if not control_variate:
+            return mc_price
+            
+        # CORRECTION: Utiliser le prix de l'action comme variable de contrôle
+        # E[S_T] = S0 * exp(rT)
+        control = terminal_prices
+        expected_ST = S0 * np.exp(r*T)
+        
+        # Covariance entre payoff et variable de contrôle
+        cov_matrix = np.cov(payoff, control)
+        beta = -cov_matrix[0,1] / np.var(control)
+        
+        # Control variate estimator
+        cv_price = mc_price + beta * np.exp(-r*T) * (np.mean(control) - expected_ST)
+        
+        return mc_price, cv_price
+
     def european_put_mc(self, 
                    S0: float, 
                    K: float, 
@@ -135,31 +133,27 @@ class MCPricingEngine:
                    M: int = 100000, 
                    antithetic: bool = True,
                    control_variate: bool = False) -> Union[float, Tuple[float, float]]:
-    """Monte Carlo pricing of European put with proper control variates"""
-    S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
-    payoff = np.maximum(K - S[:, -1], 0)
-    mc_price = np.exp(-r*T) * np.mean(payoff)
-    
-    if not control_variate:
-        return mc_price
-    
-    # Use analytical Black-Scholes put as control
-    bs_price = self.black_scholes_put(S0, K, T, r, sigma)
-    
-    # Use terminal stock price as control (same for both call and put)
-    control = np.exp(-r*T) * S[:, -1]
-    
-    covariance = np.cov(payoff, control)[0, 1]
-    control_variance = np.var(control)
-    
-    if control_variance > 1e-10:
-        beta = -covariance / control_variance
-    else:
-        beta = 0
-    
-    cv_price = mc_price + beta * (np.mean(control) - S0)
-    
-    return mc_price, cv_price
+        """Monte Carlo pricing of European put with optimized control variates"""
+        S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
+        terminal_prices = S[:, -1]
+        
+        # Standard MC payoff
+        payoff = np.maximum(K - terminal_prices, 0)
+        mc_price = np.exp(-r*T) * np.mean(payoff)
+        
+        if not control_variate:
+            return mc_price
+            
+        # CORRECTION: Même approche que pour le call
+        control = terminal_prices
+        expected_ST = S0 * np.exp(r*T)
+        
+        cov_matrix = np.cov(payoff, control)
+        beta = -cov_matrix[0,1] / np.var(control)
+        
+        cv_price = mc_price + beta * np.exp(-r*T) * (np.mean(control) - expected_ST)
+        
+        return mc_price, cv_price
     
     def convergence_analysis(self, 
                            option_func, 

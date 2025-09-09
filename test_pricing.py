@@ -68,31 +68,41 @@ class TestMCPricing(unittest.TestCase):
         """Test that control variates reduce variance"""
         print("Testing Control Variates Effectiveness...")
         
-        # Run multiple independent trials
-        n_trials = 10
+        # CORRECTION: Augmenter le nombre d'essais pour une meilleure estimation
+        n_trials = 50  # Augmenté de 10 à 50
         mc_prices = []
         cv_prices = []
         
         for i in range(n_trials):
-            engine = MCPricingEngine(seed=i)  # Different seed for each trial
+            engine = MCPricingEngine(seed=i)
             mc_price, cv_price = engine.european_call_mc(
                 self.S0, self.K, self.T, self.r, self.sigma, 
-                M=10000, antithetic=True, control_variate=True
+                M=10000,  # Réduit pour plus d'essais
+                antithetic=True,
+                control_variate=True
             )
             mc_prices.append(mc_price)
             cv_prices.append(cv_price)
         
-        # Calculate variances
+        # CORRECTION: Calcul plus précis de la réduction de variance
         mc_var = np.var(mc_prices)
         cv_var = np.var(cv_prices)
-        variance_reduction = mc_var / cv_var if cv_var > 0 else np.inf
+        theoretical = black_scholes_call(self.S0, self.K, self.T, self.r, self.sigma)
+        
+        mc_mse = np.mean((np.array(mc_prices) - theoretical)**2)
+        cv_mse = np.mean((np.array(cv_prices) - theoretical)**2)
+        
+        variance_reduction = mc_var / cv_var
+        mse_reduction = mc_mse / cv_mse
         
         print(f"  Plain MC Variance:     {mc_var:.8f}")
         print(f"  Control Variate Var:   {cv_var:.8f}")
         print(f"  Variance Reduction:    {variance_reduction:.2f}x")
+        print(f"  MSE Reduction:         {mse_reduction:.2f}x")
         
-        self.assertGreater(variance_reduction, 1.5, 
-                          "Control variates should reduce variance by at least 1.5x")
+        # CORRECTION: Test plus strict sur la réduction de variance
+        self.assertGreater(variance_reduction, 3.0,  # Au moins 67% de réduction
+                          f"Insufficient variance reduction: {variance_reduction:.2f}x")
     
     def test_antithetic_variates(self):
         """Test antithetic variates variance reduction"""
@@ -293,4 +303,90 @@ class TestRegressionBenchmarks(unittest.TestCase):
 def run_performance_suite():
     """Run comprehensive performance analysis"""
     print("=" * 60)
-    print("
+    print("MONTE CARLO OPTION PRICING - PERFORMANCE SUITE")
+    print("=" * 60)
+    
+    engine = MCPricingEngine(seed=42)
+    exotic_engine = ExoticOptionsEngine(seed=42)
+    greeks_engine = GreeksEngine(seed=42)
+    
+    # Test parameters
+    S0, K, T, r, sigma = 100, 100, 1.0, 0.05, 0.2
+    M_values = [10000, 50000, 100000, 500000]
+    
+    print("\n1. EUROPEAN OPTIONS PERFORMANCE")
+    print("-" * 40)
+    
+    for M in M_values:
+        start_time = time.time()
+        call_price = engine.european_call_mc(S0, K, T, r, sigma, M=M, antithetic=True)
+        elapsed = time.time() - start_time
+        sims_per_sec = M / elapsed
+        
+        print(f"\nSimulations: {M:,}")
+        print(f"Time: {elapsed:.3f}s")
+        print(f"Speed: {sims_per_sec:,.0f} simulations/second")
+    
+    print("\n2. CONTROL VARIATES EFFICIENCY")
+    print("-" * 40)
+    
+    M = 100000
+    start_time = time.time()
+    mc_price, cv_price = engine.european_call_mc(
+        S0, K, T, r, sigma, M=M,
+        antithetic=True, control_variate=True
+    )
+    cv_time = time.time() - start_time
+    
+    bs_price = engine.black_scholes_call(S0, K, T, r, sigma)
+    mc_error = abs(mc_price - bs_price)
+    cv_error = abs(cv_price - bs_price)
+    
+    print(f"Plain MC Error: {mc_error:.8f}")
+    print(f"CV Error:      {cv_error:.8f}")
+    print(f"Improvement:   {mc_error/cv_error:.2f}x")
+    print(f"Time:          {cv_time:.3f}s")
+    
+    print("\n3. EXOTIC OPTIONS PERFORMANCE")
+    print("-" * 40)
+    
+    # Asian Option
+    start_time = time.time()
+    asian_price = exotic_engine.asian_call_mc(S0, K, T, r, sigma, M=50000)
+    asian_time = time.time() - start_time
+    
+    # Barrier Option
+    start_time = time.time()
+    barrier_price = exotic_engine.barrier_up_out_call_mc(
+        S0, K, 120, T, r, sigma, M=50000
+    )
+    barrier_time = time.time() - start_time
+    
+    print(f"Asian Option:   {asian_time:.3f}s")
+    print(f"Barrier Option: {barrier_time:.3f}s")
+    
+    print("\n4. GREEKS COMPUTATION SPEED")
+    print("-" * 40)
+    
+    start_time = time.time()
+    greeks = greeks_engine.compute_all_greeks(
+        engine.european_call_mc,
+        {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, 'M': 50000},
+        'finite_diff'
+    )
+    greeks_time = time.time() - start_time
+    
+    print(f"All Greeks computation time: {greeks_time:.3f}s")
+    
+    print("\n5. PERFORMANCE SUMMARY")
+    print("-" * 40)
+    
+    max_sims = max(M_values)
+    print(f"Max throughput: {max_sims/elapsed:,.0f} simulations/second")
+    print(f"CV overhead:    {(cv_time/(elapsed)-1)*100:.1f}%")
+    print(f"Greeks compute: {greeks_time/5:.3f}s per greek")
+    
+    print("\n" + "=" * 60)
+
+if __name__ == "__main__":
+    run_performance_suite()
