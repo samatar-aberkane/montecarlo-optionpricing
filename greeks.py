@@ -215,160 +215,151 @@ class GreeksEngine(MCPricingEngine):
             'theta': theta,
             'rho': rho
         }
-    
+
+
     def compute_all_greeks(self, 
-                          pricing_func: Callable,
-                          params: Dict[str, Any],
-                          method: str = 'finite_diff') -> Dict[str, float]:
-        """
-        Compute all Greeks using specified method
-        
-        Parameters:
-        -----------
-        method: 'finite_diff', 'pathwise', 'likelihood_ratio', 'analytical'
-        """
-        greeks = {}
-        
-        if method == 'finite_diff':
-            for greek in ['delta', 'gamma', 'vega', 'theta', 'rho']:
-                greeks[greek] = self.finite_difference_greeks(pricing_func, params, greek)
-                
-        elif method == 'analytical' and 'option_type' in params:
-            # Only for vanilla options
-            greeks = self.analytical_greeks_bs(
-                params['S0'], params['K'], params['T'], 
-                params['r'], params['sigma'], params['option_type']
-            )
+                              pricing_func: Callable,
+                              params: Dict[str, Any],
+                              method: str = 'finite_diff') -> Dict[str, float]:
+            """
+            Compute all Greeks using specified method
             
-        elif method == 'pathwise':
-            # Implement pathwise for other Greeks as needed
-            greeks['delta'] = self.pathwise_delta(
-                params['S0'], params['K'], params['T'], params['r'], params['sigma'],
-                params.get('option_type', 'call'), params.get('N', 100), 
-                params.get('M', 100000)
-            )
-            # Fill others with finite differences
-            for greek in ['gamma', 'vega', 'theta', 'rho']:
-                greeks[greek] = self.finite_difference_greeks(pricing_func, params, greek)
-                
-        else:
-            raise ValueError(f"Unknown method: {method}")
+            Parameters:
+            -----------
+            method: 'finite_diff', 'analytical'
+            """
+            greeks = {}
+            
+            if method in ['finite_diff', 'central']:
+                for greek in ['delta', 'gamma', 'vega', 'theta', 'rho']:
+                    greeks[greek] = self.finite_difference_greeks(pricing_func, params, greek, method='central')
+                    
+            elif method == 'analytical' and 'option_type' in params:
+                # Only for vanilla options
+                greeks = self.analytical_greeks_bs(
+                    params['S0'], params['K'], params['T'], 
+                    params['r'], params['sigma'], params['option_type']
+                )
+            
+            else:
+                raise ValueError(f"Unknown method: {method}")
+            
+            return greeks
+    
+
+
+    # Backward compatibility functions
+    def delta_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
+        """Backward compatible delta calculation"""
+        from pricing import european_call_mc, european_put_mc
+        engine = GreeksEngine(kwargs.get('seed'))
         
-        return greeks
-
-
-# Backward compatibility functions
-def delta_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
-    """Backward compatible delta calculation"""
-    from pricing import european_call_mc, european_put_mc
-    engine = GreeksEngine(kwargs.get('seed'))
+        pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
+        params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        
+        return engine.finite_difference_greeks(pricing_func, params, 'delta')
     
-    pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
-    params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+    def gamma_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
+        """Backward compatible gamma calculation"""
+        from pricing import european_call_mc, european_put_mc
+        engine = GreeksEngine(kwargs.get('seed'))
+        
+        pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
+        params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        
+        return engine.finite_difference_greeks(pricing_func, params, 'gamma')
     
-    return engine.finite_difference_greeks(pricing_func, params, 'delta')
-
-def gamma_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
-    """Backward compatible gamma calculation"""
-    from pricing import european_call_mc, european_put_mc
-    engine = GreeksEngine(kwargs.get('seed'))
+    def vega_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
+        """Backward compatible vega calculation"""
+        from pricing import european_call_mc, european_put_mc
+        engine = GreeksEngine(kwargs.get('seed'))
+        
+        pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
+        params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        
+        return engine.finite_difference_greeks(pricing_func, params, 'vega')
     
-    pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
-    params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+    def theta_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
+        """Backward compatible theta calculation"""
+        from pricing import european_call_mc, european_put_mc
+        engine = GreeksEngine(kwargs.get('seed'))
+        
+        pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
+        params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        
+        return engine.finite_difference_greeks(pricing_func, params, 'theta')
     
-    return engine.finite_difference_greeks(pricing_func, params, 'gamma')
-
-def vega_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
-    """Backward compatible vega calculation"""
-    from pricing import european_call_mc, european_put_mc
-    engine = GreeksEngine(kwargs.get('seed'))
+    def rho_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
+        """Backward compatible rho calculation"""
+        from pricing import european_call_mc, european_put_mc
+        engine = GreeksEngine(kwargs.get('seed'))
+        
+        pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
+        params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        
+        return engine.finite_difference_greeks(pricing_func, params, 'rho')
     
-    pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
-    params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
     
-    return engine.finite_difference_greeks(pricing_func, params, 'vega')
-
-def theta_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
-    """Backward compatible theta calculation"""
-    from pricing import european_call_mc, european_put_mc
-    engine = GreeksEngine(kwargs.get('seed'))
+    if __name__ == "__main__":
+        import time
+        from pricing import european_call_mc, european_put_mc
     
-    pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
-    params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        print("=== GREEKS CALCULATION ENGINE ===")
     
-    return engine.finite_difference_greeks(pricing_func, params, 'theta')
-
-def rho_mc(option_type, S0, K, T, r, sigma, eps=1e-4, **kwargs):
-    """Backward compatible rho calculation"""
-    from pricing import european_call_mc, european_put_mc
-    engine = GreeksEngine(kwargs.get('seed'))
+        # Test parameters
+        S0, K, T, r, sigma = 100, 100, 1.0, 0.05, 0.2
+        M = 50000
     
-    pricing_func = european_call_mc if option_type.lower() == 'call' else european_put_mc
-    params = {'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma, **kwargs}
+        engine = GreeksEngine(seed=42)
     
-    return engine.finite_difference_greeks(pricing_func, params, 'rho')
-
-
-if __name__ == "__main__":
-    import time
-    from pricing import european_call_mc, european_put_mc
-
-    print("=== GREEKS CALCULATION ENGINE ===")
-
-    # Test parameters
-    S0, K, T, r, sigma = 100, 100, 1.0, 0.05, 0.2
-    M = 50000
-
-    engine = GreeksEngine(seed=42)
-
-    print(f"Parameters: S0={S0}, K={K}, T={T}, r={r}, σ={sigma}")
-    print(f"Simulations: {M:,}")
-
-    # Analytical Greeks (benchmark)
-    analytical = engine.analytical_greeks_bs(S0, K, T, r, sigma, 'call')
-    print(f"\n--- Analytical Greeks (Black-Scholes) ---")
-    for greek, value in analytical.items():
-        print(f"{greek.capitalize()}: {value:.6f}")
-
-    # Monte Carlo Greeks
-    params = {
-        'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma,
-        'M': M, 'antithetic': True, 'option_type': 'call'
-    }
-
-    print(f"\n--- Monte Carlo Greeks (Finite Differences) ---")
-    start = time.time()
-    mc_greeks = engine.compute_all_greeks(european_call_mc, params, 'finite_diff')
-    fd_time = time.time() - start
-
-    for greek, value in mc_greeks.items():
-        analytical_val = analytical[greek]
-        error = abs(value - analytical_val)
-        print(f"{greek.capitalize()}: {value:.6f} (Error: {error:.6f})")
-
-    print(f"Time: {fd_time:.3f}s")
-
-    # Pathwise Greeks
-    print(f"\n--- Advanced Greeks (Pathwise Delta) ---")
-    start = time.time()
-    pathwise_delta = engine.pathwise_delta(S0, K, T, r, sigma, 'call', M=M)
-    pathwise_time = time.time() - start
-
-    delta_error = abs(pathwise_delta - analytical['delta'])
-    print(f"Pathwise Delta: {pathwise_delta:.6f} (Error: {delta_error:.6f})")
-    print(f"Time: {pathwise_time:.3f}s")
-
-    # Likelihood ratio vega
-    start = time.time()
-    lr_vega = engine.likelihood_ratio_vega(S0, K, T, r, sigma, 'call', M=M)
-    lr_time = time.time() - start
-
-    vega_error = abs(lr_vega - analytical['vega'])
-    print(f"Likelihood Ratio Vega: {lr_vega:.6f} (Error: {vega_error:.6f})")
-    print(f"Time: {lr_time:.3f}s")
-
-    # Performance summary
-    print(f"\n--- Performance Comparison ---")
-    print(f"Finite Diff:   {fd_time:.3f}s (all Greeks)")
-    print(f"Pathwise:      {pathwise_time:.3f}s (delta only)")
-    print(f"Likelihood:    {lr_time:.3f}s (vega only)")
+        print(f"Parameters: S0={S0}, K={K}, T={T}, r={r}, σ={sigma}")
+        print(f"Simulations: {M:,}")
+    
+        # Analytical Greeks (benchmark)
+        analytical = engine.analytical_greeks_bs(S0, K, T, r, sigma, 'call')
+        print(f"\n--- Analytical Greeks (Black-Scholes) ---")
+        for greek, value in analytical.items():
+            print(f"{greek.capitalize()}: {value:.6f}")
+    
+        # Monte Carlo Greeks
+        params = {
+            'S0': S0, 'K': K, 'T': T, 'r': r, 'sigma': sigma,
+            'M': M, 'antithetic': True, 'option_type': 'call'
+        }
+    
+        print(f"\n--- Monte Carlo Greeks (Finite Differences) ---")
+        start = time.time()
+        mc_greeks = engine.compute_all_greeks(european_call_mc, params, 'finite_diff')
+        fd_time = time.time() - start
+    
+        for greek, value in mc_greeks.items():
+            analytical_val = analytical[greek]
+            error = abs(value - analytical_val)
+            print(f"{greek.capitalize()}: {value:.6f} (Error: {error:.6f})")
+    
+        print(f"Time: {fd_time:.3f}s")
+    
+        # Pathwise Greeks
+        print(f"\n--- Advanced Greeks (Pathwise Delta) ---")
+        start = time.time()
+        pathwise_delta = engine.pathwise_delta(S0, K, T, r, sigma, 'call', M=M)
+        pathwise_time = time.time() - start
+    
+        delta_error = abs(pathwise_delta - analytical['delta'])
+        print(f"Pathwise Delta: {pathwise_delta:.6f} (Error: {delta_error:.6f})")
+        print(f"Time: {pathwise_time:.3f}s")
+    
+        # Likelihood ratio vega
+        start = time.time()
+        lr_vega = engine.likelihood_ratio_vega(S0, K, T, r, sigma, 'call', M=M)
+        lr_time = time.time() - start
+    
+        vega_error = abs(lr_vega - analytical['vega'])
+        print(f"Likelihood Ratio Vega: {lr_vega:.6f} (Error: {vega_error:.6f})")
+        print(f"Time: {lr_time:.3f}s")
+    
+        # Performance summary
+        print(f"\n--- Performance Comparison ---")
+        print(f"Finite Diff:   {fd_time:.3f}s (all Greeks)")
+        print(f"Pathwise:      {pathwise_time:.3f}s (delta only)")
+        print(f"Likelihood:    {lr_time:.3f}s (vega only)")
