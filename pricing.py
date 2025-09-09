@@ -84,81 +84,82 @@ class MCPricingEngine:
         d1 = (np.log(S0 / K) + (r + 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
         d2 = d1 - sigma * np.sqrt(T)
         return K * np.exp(-r*T) * norm.cdf(-d2) - S0 * norm.cdf(-d1)
-    
     def european_call_mc(self, 
-                        S0: float, 
-                        K: float, 
-                        T: float, 
-                        r: float, 
-                        sigma: float,
-                        N: int = 100, 
-                        M: int = 100000, 
-                        antithetic: bool = True,
-                        control_variate: bool = False) -> Union[float, Tuple[float, float]]:
-        """
-        Monte Carlo pricing of European call with optional control variates
-        
-        Parameters:
-        -----------
-        control_variate: If True, uses Black-Scholes as control variate
-        
-        Returns:
-        --------
-        price: Option price
-        If control_variate=True, returns (mc_price, cv_price)
-        """
-        S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
-        payoff = np.maximum(S[:, -1] - K, 0)
-        mc_price = np.exp(-r*T) * np.mean(payoff)
-        
-        if not control_variate:
-            return mc_price
-        
-        # Control Variate Implementation
-        bs_price = self.black_scholes_call(S0, K, T, r, sigma)
-        
-        # Use a simpler European call as control (same parameters but fewer time steps)
-        S_control = self.simulate_gbm_vectorized(S0, T, r, sigma, 1, M, antithetic)
-        payoff_control = np.maximum(S_control[:, -1] - K, 0)
-        mc_control = np.exp(-r*T) * payoff_control
-        
-        # Calculate optimal beta (correlation coefficient)
-        beta = -np.cov(payoff, mc_control)[0, 1] / np.var(mc_control)
-        
-        # Control variate estimator
-        cv_price = mc_price + beta * (np.exp(-r*T) * np.mean(mc_control) - bs_price)
-        
-        return mc_price, cv_price
+                    S0: float, 
+                    K: float, 
+                    T: float, 
+                    r: float, 
+                    sigma: float,
+                    N: int = 100, 
+                    M: int = 100000, 
+                    antithetic: bool = True,
+                    control_variate: bool = False) -> Union[float, Tuple[float, float]]:
+    """
+    Monte Carlo pricing of European call with proper control variates
+    """
+    S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
+    payoff = np.maximum(S[:, -1] - K, 0)
+    mc_price = np.exp(-r*T) * np.mean(payoff)
+    
+    if not control_variate:
+        return mc_price
+    
+    # CORRECTION: Use analytical Black-Scholes as control variate
+    bs_price = self.black_scholes_call(S0, K, T, r, sigma)
+    
+    # CORRECTION: Use the same simulated paths for control
+    # The control is the discounted terminal stock price
+    control = np.exp(-r*T) * S[:, -1]  # E[control] = S0
+    
+    # CORRECTION: Proper beta calculation
+    covariance = np.cov(payoff, control)[0, 1]
+    control_variance = np.var(control)
+    
+    if control_variance > 1e-10:  # Avoid division by zero
+        beta = -covariance / control_variance
+    else:
+        beta = 0
+    
+    # Control variate estimator
+    cv_price = mc_price + beta * (np.mean(control) - S0)
+    
+    return mc_price, cv_price
     
     def european_put_mc(self, 
-                       S0: float, 
-                       K: float, 
-                       T: float, 
-                       r: float, 
-                       sigma: float,
-                       N: int = 100, 
-                       M: int = 100000, 
-                       antithetic: bool = True,
-                       control_variate: bool = False) -> Union[float, Tuple[float, float]]:
-        """Monte Carlo pricing of European put with optional control variates"""
-        S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
-        payoff = np.maximum(K - S[:, -1], 0)
-        mc_price = np.exp(-r*T) * np.mean(payoff)
-        
-        if not control_variate:
-            return mc_price
-        
-        # Control Variate Implementation
-        bs_price = self.black_scholes_put(S0, K, T, r, sigma)
-        
-        S_control = self.simulate_gbm_vectorized(S0, T, r, sigma, 1, M, antithetic)
-        payoff_control = np.maximum(K - S_control[:, -1], 0)
-        mc_control = np.exp(-r*T) * payoff_control
-        
-        beta = -np.cov(payoff, mc_control)[0, 1] / np.var(mc_control)
-        cv_price = mc_price + beta * (np.exp(-r*T) * np.mean(mc_control) - bs_price)
-        
-        return mc_price, cv_price
+                   S0: float, 
+                   K: float, 
+                   T: float, 
+                   r: float, 
+                   sigma: float,
+                   N: int = 100, 
+                   M: int = 100000, 
+                   antithetic: bool = True,
+                   control_variate: bool = False) -> Union[float, Tuple[float, float]]:
+    """Monte Carlo pricing of European put with proper control variates"""
+    S = self.simulate_gbm_vectorized(S0, T, r, sigma, N, M, antithetic)
+    payoff = np.maximum(K - S[:, -1], 0)
+    mc_price = np.exp(-r*T) * np.mean(payoff)
+    
+    if not control_variate:
+        return mc_price
+    
+    # Use analytical Black-Scholes put as control
+    bs_price = self.black_scholes_put(S0, K, T, r, sigma)
+    
+    # Use terminal stock price as control (same for both call and put)
+    control = np.exp(-r*T) * S[:, -1]
+    
+    covariance = np.cov(payoff, control)[0, 1]
+    control_variance = np.var(control)
+    
+    if control_variance > 1e-10:
+        beta = -covariance / control_variance
+    else:
+        beta = 0
+    
+    cv_price = mc_price + beta * (np.mean(control) - S0)
+    
+    return mc_price, cv_price
     
     def convergence_analysis(self, 
                            option_func, 
