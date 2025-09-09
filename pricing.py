@@ -51,7 +51,7 @@ class MCPricingEngine:
         else:
             Z = self.rng.normal(0, 1, (M, N))
         
-        # Vectorized calculation - NO LOOPS!
+        # Vectorized calculation - no loops
         log_returns = (r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z
         log_S = np.zeros((M, N+1))
         log_S[:, 0] = np.log(S0)
