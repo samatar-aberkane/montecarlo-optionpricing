@@ -28,7 +28,7 @@ class ConvergenceAnalyzer:
         self.exotic_engine = ExoticOptionsEngine(seed=seed)
         self.greeks_engine = GreeksEngine(seed=seed)
     
-   def monte_carlo_convergence(self, 
+    def monte_carlo_convergence(self, 
                                pricing_func: Callable,
                                true_price: float,
                                M_values: np.ndarray,
