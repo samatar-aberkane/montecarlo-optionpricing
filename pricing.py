@@ -17,54 +17,40 @@ class MCPricingEngine:
         self.rng = np.random.default_rng(seed)
 
     def simulate_gbm_vectorized(self, 
-                               S0: float, 
-                               T: float, 
-                               r: float, 
-                               sigma: float, 
-                               N: int, 
-                               M: int, 
-                               antithetic: bool = False) -> np.ndarray:
-        """
-        Vectorized Geometric Brownian Motion simulation
-        
-        Parameters:
-        -----------
-        S0: Initial stock price
-        T: Time to maturity
-        r: Risk-free rate
-        sigma: Volatility
-        N: Number of time steps
-        M: Number of simulations
-        antithetic: Use antithetic variates
-        
-        Returns:
-        --------
-        S: Array of shape (M, N+1) containing price paths
-        """
+                          S0: float, 
+                          T: float, 
+                          r: float, 
+                          sigma: float, 
+                          N: int, 
+                          M: int, 
+                          antithetic: bool = False) -> np.ndarray:
+        """Optimized GBM simulation"""
         dt = T / N
         
-        # Adjust M for antithetic variates
-        if antithetic and M % 2 != 0:
-            warnings.warn("M must be even for antithetic variates. Using M+1 simulations.", UserWarning)
-            M += 1
-
-        # Generate all random numbers at once
+        # CORRECTION: Forcer M à être pair pour antithetic
         if antithetic:
-            half_M = M // 2
-            Z = self.rng.normal(0, 1, (half_M, N))
+            M = (M + 1) // 2 * 2
+        
+        # Generate random numbers
+        if antithetic:
+            Z = self.rng.normal(0, 1, (M//2, N))
             Z = np.vstack([Z, -Z])
         else:
             Z = self.rng.normal(0, 1, (M, N))
-
-        # Calculate log returns
-        log_returns = (r - 0.5 * sigma**2) * dt + sigma * np.sqrt(dt) * Z
         
-        # Calculate price paths
-        log_S = np.zeros((M, N+1))
-        log_S[:, 0] = np.log(S0)
-        log_S[:, 1:] = np.log(S0) + np.cumsum(log_returns, axis=1)
+        # CORRECTION: Calcul vectorisé plus efficace
+        drift = (r - 0.5 * sigma**2) * dt
+        diffusion = sigma * np.sqrt(dt)
         
-        return np.exp(log_S)
+        # Calculate cumulative returns directly
+        cum_returns = np.cumsum(drift + diffusion * Z, axis=1)
+        
+        # Create price paths in one step
+        S = np.empty((M, N+1))
+        S[:, 0] = S0
+        S[:, 1:] = S0 * np.exp(cum_returns)
+        
+        return S
     
     
     def black_scholes_call(self, S0: float, K: float, T: float, r: float, sigma: float) -> float:

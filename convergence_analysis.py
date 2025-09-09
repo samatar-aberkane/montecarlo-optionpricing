@@ -55,27 +55,29 @@ class ConvergenceAnalyzer:
         computation_times = np.zeros(len(M_values))
         
         for i, M in enumerate(M_values):
-            prices_per_trial = np.zeros(n_trials)
+            prices = np.zeros(n_trials)
             start_time = time.time()
             
             kwargs_trial = kwargs.copy()
             kwargs_trial['M'] = int(M)
             
-            for j in range(n_trials):
-                # Call the pricing function
-                price_result = pricing_func(**kwargs_trial)
-                
-                # Handle tuple return (e.g., from control variates)
-                if isinstance(price_result, tuple):
-                    prices_per_trial[j] = price_result[0]
-                else:
-                    prices_per_trial[j] = price_result
+            # CORRECTION: Utiliser la même seed pour tous les trials d'une taille M donnée
+            base_seed = kwargs_trial.get('seed', 42)
             
+            for j in range(n_trials):
+                kwargs_trial['seed'] = base_seed + j
+                price = pricing_func(**kwargs_trial)
+                
+                # Handle tuple return from control variates
+                if isinstance(price, tuple):
+                    price = price[1]  # Use control variate price
+                prices[j] = price
+                
             end_time = time.time()
             
-            mean_prices[i] = np.mean(prices_per_trial)
-            std_devs[i] = np.std(prices_per_trial, ddof=1)
-            rmses[i] = np.sqrt(np.mean((prices_per_trial - true_price)**2))
+            mean_prices[i] = np.mean(prices)
+            std_devs[i] = np.std(prices, ddof=1)
+            rmses[i] = np.sqrt(np.mean((prices - true_price)**2))
             computation_times[i] = (end_time - start_time) / n_trials
             
         return {
