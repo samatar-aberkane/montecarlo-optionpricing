@@ -6,8 +6,6 @@
 
 ## 🚀 Getting Started
 
-1. Clone the repository:
-
 **Professional-grade Monte Carlo option pricing engine with advanced variance reduction techniques and comprehensive Greeks calculation.**
 
 ## 🚀 Key Features
