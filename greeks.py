@@ -372,15 +372,3 @@ if __name__ == "__main__":
     print(f"Finite Diff:   {fd_time:.3f}s (all Greeks)")
     print(f"Pathwise:      {pathwise_time:.3f}s (delta only)")
     print(f"Likelihood:    {lr_time:.3f}s (vega only)")
-            if isinstance(price_down, tuple):
-                price_down = price_down[0]
-            
-            greek = (price_up - price_down) / (2 * eps)
-            
-        elif method == 'forward':
-            params_up = params.copy()
-            params_up[param_name] += eps
-            price_up = pricing_func(**params_up)
-            
-            if isinstance(price_up, tuple):
-                price_
